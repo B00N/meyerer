@@ -1,0 +1,71 @@
+<?php
+// $Id: meyerer_location_taxonomy.install 725 2010-11-11 09:46:11Z paro $
+
+/**
+ * @file
+ * Installation routines.
+*/
+
+/**
+ * Implementation of hook_install().
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_install()
+{
+    drupal_install_schema('meyerer_location_taxonomy');
+    variable_set('meyerer_location_taxonomy_settings', serialize(array('vid' => 0)));
+
+    // Change weight so we execute after location.
+    db_query('UPDATE {system} SET weight = 1 WHERE name = "%s" AND type = "%s"', 'meyerer_location_taxonomy', 'module');
+}
+
+
+/**
+ * Implementation of hook_schema().
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_schema()
+{
+    $schema['meyerer_location_taxonomy'] = array
+    (
+        'description' => 'meyerer_location_taxonomy.module {location} supplementary table.',
+        'fields'      => array
+        (
+            'lid'     => array
+            (
+                'default'     => 0,
+                'description' => '{location}.lid',
+                'not null'    => true,
+                'type'        => 'int',
+                'unsigned'    => true,
+            ),
+            'tid'     => array
+            (
+                'default'     => null,
+                'description' => 'Taxonomy',
+                'type'        => 'int',
+                'unsigned'    => true,
+            ),
+        ),
+        'primary key'         => array('lid'),
+    );
+
+    return $schema;
+}
+
+
+/**
+ * Implementation of hook_uninstall().
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_uninstall()
+{
+    drupal_uninstall_schema('meyerer_location_taxonomy');
+    variable_del('meyerer_location_taxonomy_settings');
+}

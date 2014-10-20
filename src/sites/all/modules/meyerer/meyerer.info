@@ -1,0 +1,8 @@
+; $Id:  $
+name = Meyerer
+package         = Meyerer
+description = Helpful special functions.
+core = 6.x
+
+version = "6.x-1.0"
+project = "meyerer"

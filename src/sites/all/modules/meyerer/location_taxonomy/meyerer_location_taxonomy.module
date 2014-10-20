@@ -1,0 +1,211 @@
+<?php
+
+/**
+ * [di] Meyerer Location Taxonomy Module;  adds taxonomy field to Location addresses.
+ *
+ * @copyright   2010 [di] digitale informationssyteme gmbh
+ * @author      patrick röttger <roettger@digi-info.de>
+ * @version     $Id: meyerer_location_taxonomy.module 725 2010-11-11 09:46:11Z paro $
+ * @package     [Meyerer]
+*/
+
+
+/**
+ * Implementation of hook_locationapi().
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_locationapi(&$location, $op, $a3 = null, $a4 = null)
+{
+    switch ($op)
+    {
+        case 'defaults':
+            return array
+            (
+              'tid' => array('collect' => 0, 'default' => '', 'weight' => 30),
+            );
+
+        case 'delete':
+            db_query('DELETE FROM {meyerer_location_taxonomy} WHERE lid = %d', $location['lid']);
+            break;
+
+        case 'fields':
+            return array('tid' => t('Taxonomy'));
+
+        case 'field_expand':
+            if ($a3 == 'tid')
+            {
+                static $options = array();
+
+                if (empty($options))
+                {
+                    $settings     = variable_get('meyerer_location_taxonomy_settings', null);
+                    $settings     = (is_string($settings))  ?  unserialize($settings)  :  array('vid' => 0);
+
+                    $options[0]   = t('- Please choose -');
+                    $terms        = taxonomy_get_tree($settings['vid'], 0);
+
+                    foreach ($terms as $term)
+                    {
+                        $options[$term->tid]  = $term->name;
+                    }
+                }
+
+                return array
+                (
+                    '#default_value'  => $location,
+                    '#description'    => null,
+                    '#options'        => $options,
+                    '#required'       => ($a4 == 2),
+                    '#size'           => 1,
+                    '#title'          => t('Taxonomy'),
+                    '#type'           => 'select',
+                );
+            }
+
+            break;
+
+        case 'load':
+            $fields = array('tid' => '');
+
+            if ($row = db_fetch_object(db_query('SELECT tid FROM {meyerer_location_taxonomy} WHERE lid = %d', $location['lid'])))
+            {
+                $fields['tid'] = $row->tid;
+            }
+
+            return $fields;
+
+        case 'save':
+            db_query('DELETE FROM {meyerer_location_taxonomy} WHERE lid = %d', $location['lid']);
+
+            if (!empty($location['tid']))
+            {
+                db_query("INSERT INTO {meyerer_location_taxonomy} (lid, tid) VALUES (%d, %d)", $location['lid'], $location['tid']);
+            }
+
+            break;
+    }
+}
+
+
+/**
+ * Implementation of hook_menu().
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_menu()
+{
+    $items = array();
+    $items['admin/settings/meyerer_location_taxonomy'] = array
+    (
+        'access arguments'  => array('access administration pages'),
+        'page arguments'    => array('meyerer_location_taxonomy_settings'),
+        'page callback'     => 'drupal_get_form',
+        'title'             => t('Meyerer Location Taxonomy settings'),
+        'type'              => MENU_NORMAL_ITEM,
+    );
+
+    return $items;
+}
+
+
+/**
+ * Settings form in administration pages.
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_settings()
+{
+    drupal_set_title(t('Meyerer Location Taxonomy settings'));
+
+    $form         = array();
+    $options      = array(0 => t('- Please choose -'));
+    $vocabularies = taxonomy_get_vocabularies();
+
+    $settings     = variable_get('meyerer_location_taxonomy_settings', null);
+    $settings     = (is_string($settings))  ?  unserialize($settings)  :  array('vid' => 0);
+
+    foreach ($vocabularies as $vocabulary)
+    {
+        $options[$vocabulary->vid]  = $vocabulary->name;
+    }
+
+    $form['explanation']  = array
+    (
+        '#value'    => t('Select the vocabulary from which you want to choose terms in location forms.')
+    );
+
+    $form['vocabulary']   = array
+    (
+        '#default_value'  => $settings['vid'],
+        '#options'        => $options,
+        '#required'       => false,
+        '#size'           => 1,
+        '#title'          => t('Vocabulary'),
+        '#type'           => 'select',
+    );
+
+    $form['submit']       = array
+    (
+        '#type'           => 'submit',
+        '#value'          => t('Save')
+    );
+
+    $form['#submit']      = array('meyerer_location_taxonomy_settings_save');
+
+    return $form;
+}
+
+
+/**
+ * Save submitted values from settings form in administration pages.
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_settings_save($form, &$form_state)
+{
+    $settings = array
+    (
+        'vid' => $form_state['values']['vocabulary']
+    );
+
+    variable_set('meyerer_location_taxonomy_settings', serialize($settings));
+    drupal_set_message(t('Changes have been saved.'), 'info');
+}
+
+
+
+/**
+ * Implementation of hook_token_list().
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_token_list($type = 'all')
+{
+    if ($type == 'node' || $type == 'user' || $type == 'all')
+    {
+        $tokens['location']['location-tid_N'] = t('Location taxonomy (If there are multiple locations per node, N is the iteration, starting with 0)');
+
+        return $tokens;
+    }
+}
+
+
+/**
+ * Implementation of hook_views_api().
+ *
+ * @author    patrick röttger <roettger@digi-info.de>
+*/
+
+function meyerer_location_taxonomy_views_api()
+{
+    return array
+    (
+        'api' => 2,
+    );
+}

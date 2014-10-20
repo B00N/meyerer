@@ -1,0 +1,147 @@
+<?php
+// $Id: $
+
+
+/**
+ * Implementation of hook_help().
+ */
+function meyerer_help($path, $arg) 
+{
+    switch ($path) 
+    {
+        case 'admin/help#meyerer':
+            $output = '<p>'. t("No help informations available.") .'</p>';
+        
+        return $output;
+    }
+}
+
+function meyerer_count_attachments($node = FALSE, $type = 'picture')
+{
+	$count = 0;
+    if($node !== FALSE)
+    {
+    	if(is_array($node->{'field_blog_'.$type}))
+    	{
+        	foreach($node->{'field_blog_'.$type} as $k => $v)
+        	{
+	        	if($v['status'] == 1)
+	        	{
+	            	$count++;
+	        	}
+	    	}
+	    }
+    }
+    return $count;
+}
+
+function meyerer_link_alter(&$links, $node) 
+{
+    foreach ($links as $module => $link) 
+    {
+        if(strstr($module, 'taxonomy_term')) 
+        {
+            
+    
+        }
+        else 
+        {
+            array_reverse($links);
+            if(arg(0) == 'node' && !is_numeric(arg(1)))
+            {
+                if((meyerer_count_attachments($node, 'picture') > 0 || meyerer_count_attachments($node, 'flvvideo') > 0) && $node->readmore === FALSE)
+                {
+                    $links['node_read_more'] = array('title' => t('Read more'),
+                                                     'href'  => 'node/'.$node->nid,
+                                                    );
+                }
+            }
+            // Frank's Blog entfernen
+            unset($links['blog_usernames_blog']);
+        }
+    }
+}
+
+function meyerer_content_view_check($node, $content)
+{
+    global $user;
+    
+    if($user->uid == 0 && $node->taxonomy[1]->tid == 1) // Voc: Typ, Term: Urlaub
+    {
+        return '<p style="color: red;">'.t('Sorry, only registered user can read this content.').'</p>';
+    }
+    
+    if($user->uid > 0 && $node->taxonomy[1]->tid == 1) // Voc: Typ, Term: Urlaub
+    {
+    	if(!array_key_exists(4, $user->roles))
+    	{
+            return '<p style="color: red;">'.t('Sorry, only friends can read this content.').'</p>';
+    	}
+    	return $content;
+    	
+    }
+    
+    return $content;
+}
+
+function meyerer_wysiwyg_editor_settings_alter(&$settings, $context)
+{ 
+    if($context['profile']->editor == 'ckeditor')
+    {
+        $settings['skin'] = 'kama';
+        
+        $settings['width'] = '99%';
+             
+        $settings['toolbar'][0] = array(
+           'Bold',
+           'Italic',
+           'Strike',
+           'BulletedList',
+           'NumberedList',
+           'Outdent',
+           'Indent',
+           'Superscript',
+           'Subscript',
+           'Link',
+           'Unlink',
+           'Table',
+           'Anchor',
+           'Image',
+           'Blockquote',
+           'HorizontalRule',           
+           'TextColor',
+           'BGColor',
+        );
+              
+        $settings['toolbar'][1] = array(
+            'Undo',
+            'Redo',
+            'Cut',
+            'Copy',
+            'SelectAll',
+            'Find',
+            'Replace',
+            'Paste',
+            'PasteText',
+            'PasteFromWord',
+            'RemoveFormat',
+            'break', // extraPlugin       
+        );   
+              
+        $settings['toolbar'][2] = array(         
+            'Format',
+            'Styles',            
+            'Source',
+        );                                              
+    }
+}
+
+function phptemplate_activitystream_delicious_icon() {
+  //theme_image(path_to_theme() .'/delicious.png', 'Del.icio.us');
+  return theme_image(path_to_theme() .'/images/delicious.png', 'Del.icio.us');
+}
+
+function phptemplate_activitystream_twitter_icon() {
+  //theme_image(path_to_theme() .'/delicious.png', 'Del.icio.us');
+  return theme_image(path_to_theme() .'/images/twitter.png', 'Twitter');
+}

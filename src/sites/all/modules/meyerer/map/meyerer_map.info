@@ -1,0 +1,14 @@
+; $Id:  $
+name = Meyerer Map
+package         = Meyerer
+description = map functions.
+dependencies[]  = location
+dependencies[]  = taxonomy
+dependencies[]  = colorbox
+dependencies[]  = gmap
+dependencies[]  = gmap_taxonomy
+core = 6.x
+
+version = "6.x-1.0"
+project = "meyerer"
+

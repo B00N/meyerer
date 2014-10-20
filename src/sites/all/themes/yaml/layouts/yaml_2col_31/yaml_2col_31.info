@@ -1,0 +1,17 @@
+; $Id: yaml_2col_31.info,v 3.0.6.11 2008/11/10 19:00:00 hass Exp $
+name = YAML 2col_31
+description = Theme with 2 columns and right sidebar
+project status url = "http://updates.yaml-fuer-drupal.de/release-history"
+
+base theme = yaml
+regions[right] = Right sidebar
+regions[content_top] = Content Top
+regions[content] = Content
+regions[header] = Header
+regions[footer] = Footer
+
+version = "6.x-3.0.6.11"
+project = "yaml"
+core = 6.x
+engine = phptemplate
+datestamp = "1226340000"

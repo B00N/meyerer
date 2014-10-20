@@ -1,0 +1,44 @@
+@charset "UTF-8";
+/**
+ * "Yet Another Multicolumn Layout" - (X)HTML/CSS Framework
+ *
+ * (en) YAML debugging stylesheet
+ * (de) YAML Stylesheet zur Fehlersuche
+ *
+ * Don't make any changes in this file!
+ * Your changes should be placed in any css-file in your own stylesheet folder.
+ *
+ * @copyright       Copyright 2006-2008, Alexander Hass
+ * @license         http://www.yaml-fuer-drupal.de/en/terms-of-use
+ * @link            http://www.yaml-for-drupal.com
+ * @package         yaml-for-drupal
+ * @version         6.x-3.0.6.11
+ * @lastmodified    2008-11-10
+ */
+
+@media all
+{
+  /*------------------------------------------------------------------------------------------------------*/
+
+  /**
+   * @section layout preparation for debugging
+   * @see http://www.yaml.de/en/documentation/practice/drafting-and-debugging.html
+   */
+
+  /* Adding debugging background */
+  body { background-position: top right !important; }
+
+  #ie_clearing {
+    left: auto;
+    right: 0px;
+    background-position: top right;
+  }
+
+  /**
+   * @section pixel grid
+   */
+
+  .bg_grid {
+    background-position: top right !important;
+  }
+}

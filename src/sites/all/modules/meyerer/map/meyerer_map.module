@@ -1,0 +1,125 @@
+<?php 
+function meyerer_map_menu() {
+    
+    $items['colorbox/view'] = array(
+        'title' => 'View',
+        'page callback' => 'meyerer_map_display_view_colorbox',
+        'page arguments' => array(2),
+        'access callback' => 'node_access',
+        'access arguments' => array('view', 2),
+        'type' => MENU_CALLBACK,
+        'file' => '../colorbox/colorbox.pages.inc',
+    );
+    return $items;
+}
+
+function meyerer_map_display_view_colorbox($node) {
+    $view_id = 'Maps';
+    $display_id = 'page_1';
+    $GLOBALS['devel_shutdown'] = FALSE; // Prevent devel module from spewing.
+    $view = views_get_view($view_id);
+    print $view->execute_display($display_id, $args);    
+    exit;
+}
+
+function meyerer_map_manipulate_map_marker($element) {
+    // get all markers
+    $term_markers = array();
+    $all_terms = db_query("SELECT * FROM {gmap_taxonomy_term}");  
+    while ($term_info = db_fetch_object($all_terms))
+    {
+      $term_markers[$term_info->tid] = $term_info->marker;
+    }
+      
+    foreach($element['#settings']['markers'] as $k => $v) {
+      $sql = "SELECT location.lid, location_taxonomy.tid FROM {location} location, {meyerer_location_taxonomy} location_taxonomy WHERE (latitude = %s AND longitude = %s) AND location.lid = location_taxonomy.lid";
+      $res = db_query($sql, $v['latitude'], $v['longitude']);
+      
+      while ($location_info = db_fetch_object($res))
+      {
+        $element['#settings']['markers'][$k]['markername'] = $term_markers[$location_info->tid];
+      } 
+    }
+    return $element;   
+}
+
+function meyerer_map_block($op = 'list', $delta = 0, $edit = array()) {
+   if (user_access('access content'))
+    {
+        if ($op == 'list')
+        {
+            $blocks['nodemap']['info']      = t('Meyerer Node Map');
+            return $blocks;
+        }
+        elseif ($op == 'view')
+        {
+            switch ($delta)
+            {
+                case 'nodemap':
+                        return meyerer_map_block_view(arg(1));
+                    break;
+                default:
+                    break;
+            }
+        }
+    }    
+}
+
+function meyerer_map_block_view($nid) {
+  $block = array();
+  $node = node_load($nid);
+  if ($node->locations) {
+    $markertypes = variable_get('gmap_node_markers', array());
+    $markers = array();
+    $count = 0;
+    foreach ($node->locations as $loc) {
+      // @@@ Todo: Client side geocoding
+      if (location_has_coordinates($loc)) {
+        $count++;
+        $markername = isset($markertypes[$node->type]) ? $markertypes[$node->type] : 'drupal';
+        if (module_exists('gmap_taxonomy')) {
+          $t = db_result(db_query('SELECT marker FROM {gmap_taxonomy_node} WHERE vid = %d', $node->vid));
+          if (!empty($t)) {
+            $markername = $t;
+          }
+        }
+
+        $markertitle = $node->title;
+        if (!empty($loc['name'])) {
+          $markertitle = $loc['name'];
+        }
+
+        $markers[] = array(
+          'latitude' => $loc['latitude'],
+          'longitude' => $loc['longitude'],
+          'markername' => $markername,
+          'offset' => $count-1,
+          'opts' => array('title' => $markertitle),
+        );
+      }
+    }
+    if (!empty($markers)) {
+      $macro = variable_get('gmap_location_block_macro_'. $node->type, '');
+      if (empty($macro)) {
+        $macro = variable_get('gmap_location_block_macro', '[gmap |width=100% |height=200px |control=None |behavior=+autozoom +notype]');
+      }
+      $map = gmap_parse_macro($macro);
+      $map['latitude'] = $markers[0]['latitude'];
+      $map['longitude'] = $markers[0]['longitude'];
+      $map['markers'] = $markers;
+      
+      
+      // Some special stuff DIRTY DIRTY DIRTY
+      $termObj = taxonomy_node_get_terms_by_vocabulary($node, 5);
+      $terminfo = reset($termObj);
+      $replace = array( 'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss', ' ' => '-');
+      $term = strtr( strtolower( $terminfo->name ), $replace );
+      
+      $block['subject'] = t('Locations');
+      $mapcontent = theme('gmap', array('#settings' => $map)); // @@@ Better theme
+      $mapbutton  = '<div id="full-map-button">' . l('<img src="' . drupal_get_path('theme', 'yaml') . '/images/fullmapbutton.png" />', 'map/' . $term . '', array('html' => TRUE, 'attributes' => array('class' => 'colorbox'))) . '</div>';
+      $block['content'] = $mapcontent . $mapbutton;
+    }
+  }
+  return $block;
+}

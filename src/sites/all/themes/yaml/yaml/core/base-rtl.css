@@ -1,0 +1,105 @@
+@charset "UTF-8";
+/**
+ * "Yet Another Multicolumn Layout" for Drupal
+ *
+ * (en) YAML RTL core stylesheet
+ * (de) YAML RTL Basis-Stylesheet
+ *
+ * Don't make any changes in this file!
+ * Your changes should be placed in any css-file in your own stylesheet folder.
+ *
+ * @copyright       Copyright 2006-2008, Alexander Hass
+ * @license         http://www.yaml-fuer-drupal.de/en/terms-of-use
+ * @link            http://www.yaml-for-drupal.com
+ * @package         yaml-for-drupal
+ * @version         6.x-3.0.6.11
+ * @lastmodified    2008-11-10
+ */
+
+@media all
+{
+ /*------------------------------------------------------------------------------------------------------*/
+
+ /**
+  * @section browser reset
+  * @see     http://www.yaml.de/en/documentation/css-components/base-stylesheet.html
+  */
+
+  /* (en) Correction: margin/padding reset caused too small select boxes. */
+  /* (de) Korrektur: Das Zurücksetzen der Abstände verursacht zu kleine Selectboxen. */
+  option {
+    padding-left: 0; /* Reset LTR */
+    padding-right: 0.4em;
+  }
+
+  body {
+    /* (en) Standard values for colors and text alignment */
+    /* (de) Vorgabe der Standardfarben und Textausrichtung */
+    text-align: right;
+
+    /* (en) Standard text direction for RTL content */
+    /* (de) Vorgabe der Standardzeichenrichtung für RTL Inhalt */
+    direction: rtl;
+  }
+
+  /* (en) new standard values for lists, blockquote and cite */
+  /* (de) Neue Standardwerte für Listen & Zitate */
+  ul, ol, dl { margin: 0 1em 1em 0; }
+  li { 
+    margin-left: 0; /* Reset LTR */
+    margin-right: 1.5em;
+  }
+
+  dd { margin: 0 2em 1em 0; }
+
+  blockquote, cite { margin: 0 1.5em 1em 0; }
+
+ /*------------------------------------------------------------------------------------------------------*/
+
+ /**
+  * @section base layout | Basis Layout
+  * @see     http://www.yaml.de/en/documentation/css-components/base-stylesheet.html
+  *
+  * |-------------------------------|
+  * | #header                       |
+  * |-------------------------------|
+  * | #col1   | #col3     | #col2   |
+  * | 200 px  | flexible  | 200px   |
+  * |-------------------------------|
+  * | #footer                       |
+  * |-------------------------------|
+  */
+
+  /* (en) Text Alignment for #topnav content */
+  /* (de) Textausrichtung für #topnav Inhalte */
+  #topnav { text-align: left; } 
+
+  #header #topnav {
+    right: auto; /* Reset LTR */
+    left: 10px;
+  }
+
+ /*------------------------------------------------------------------------------------------------------*/
+
+ /**
+  * @section hidden elements | Versteckte Elemente
+  * @see     http://www.yaml.de/en/documentation/basics/skip-links.html
+  *
+  * (en) skip links and hidden content
+  * (de) Skip-Links und versteckte Inhalte
+  */
+
+  /* (en) classes for invisible elements in the base layout */
+  /* (de) Klassen für unsichtbare Elemente im Basislayout */
+  .skip, .hideme, .print {
+    /* FIXME: No idea why left works in LTR, but right:-1000em; not in RTL */
+    left: auto;
+  }
+
+  /* (en) make skip links visible when using tab navigation */
+  /* (de) Skip-Links für Tab-Navigation sichtbar schalten */
+  .skip:focus, .skip:active {
+    left: auto;
+    right: 0;
+  }
+}

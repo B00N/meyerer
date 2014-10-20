@@ -1,0 +1,36 @@
+@charset "UTF-8";
+/**
+ * "Yet Another Multicolumn Layout" for Drupal
+ *
+ * (en) RTL Horizontal list navigation "Shiny Buttons"
+ * (de) RTL Horizontale Navigationsliste "Shiny Buttons"
+ *
+ * @copyright       Copyright 2006-2008, Alexander Hass
+ * @license         http://www.yaml-fuer-drupal.de/en/terms-of-use
+ * @link            http://www.yaml-for-drupal.com
+ * @package         yaml-for-drupal
+ * @version         6.x-3.0.6.11
+ * @lastmodified    2008-11-10
+ */
+
+@media screen, projection
+{
+
+  #nav_main ul {
+    float: right;
+    /* (en) Left margin of the first button  */
+    /* (de) Abstand des ersten Buttons vom linken Rand  */
+    margin-left: 0; /* Reset LTR */
+    margin-right: 50px;
+  }
+
+  #nav_main ul li {
+    float: right;
+  }
+
+  /* TODO: Keep menu items in LTR order to workaround a currently unknown IE bug */
+  * html #nav_main ul li {
+    float: left;
+  }
+
+}

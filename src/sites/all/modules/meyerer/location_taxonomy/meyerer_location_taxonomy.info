@@ -1,0 +1,10 @@
+name            = Meyerer Location Taxonomy
+package         = Meyerer
+description     = Allows you to add a taxonomy selector to a location.
+dependencies[]  = location
+dependencies[]  = taxonomy
+core            = 6.x
+
+version         = "6.x-1.0"
+core            = "6.x"
+project         = "meyerer"

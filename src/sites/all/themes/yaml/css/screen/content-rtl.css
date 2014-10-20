@@ -1,0 +1,51 @@
+@charset "UTF-8";
+/**
+ * "Yet Another Multicolumn Layout" for Drupal
+ *
+ * (en) RTL Uniform design of standard content elements
+ * (de) RTL Einheitliche Standardformatierungen für die wichtigten Inhalts-Elemente
+ *
+ * @copyright       Copyright 2006-2008, Alexander Hass
+ * @license         http://www.yaml-fuer-drupal.de/en/terms-of-use
+ * @link            http://www.yaml-for-drupal.com
+ * @package         yaml-for-drupal
+ * @version         6.x-3.0.6.11
+ * @lastmodified    2008-11-10
+ */
+
+@media all
+{
+  /* ### Lists | Listen  #### */
+
+  ul, ol, dl { margin: 0 1em 1em 0 }
+  li { 
+    margin-left: 0; /* Reset LTR */
+    margin-right: 1.5em;
+  }
+
+  dd { margin: 0 2em 1em 0 }
+
+  /* ### text formatting | Textauszeichnung ### */
+
+  cite, blockquote { font-style: normal } /* FF corrupts italic text with RTL fonts */
+  blockquote { margin: 0 1.5em 1em 0 }
+
+  /**
+   * (en) Emphasizing external Hyperlinks via CSS
+   * (de) Hervorhebung externer Hyperlinks mit CSS
+   *
+   * @section             content-external-links
+   * @app-yaml-default    disabled
+   */
+
+  /*
+  #main a[href^="http://www.my-domain.com"],
+  #main a[href^="https://www.my-domain.com"]
+  {
+    padding-left: 0px;  Reset LTR value
+    padding-right: 12px;
+  }
+  */
+
+}
+

@@ -1,0 +1,7 @@
+@charset "UTF-8";
+/* "Yet Another Multicolumn Layout" for Drupal, 6.x-3.0.6.10 (c) by Alexander Hass (http://www.yaml-for-drupal.com) */
+@media all
+{
+html {direction:ltr}
+body {direction:rtl}
+}

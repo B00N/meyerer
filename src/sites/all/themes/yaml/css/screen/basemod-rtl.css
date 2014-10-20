@@ -1,0 +1,40 @@
+@charset "UTF-8";
+/**
+ * "Yet Another Multicolumn Layout" for Drupal
+ *
+ * (en) RTL Screen layout for YAML examples
+ * (de) RTL Bildschirmlayout für YAML-Beispiele
+ *
+ * @copyright       Copyright 2006-2008, Alexander Hass
+ * @license         http://www.yaml-fuer-drupal.de/en/terms-of-use
+ * @link            http://www.yaml-for-drupal.com
+ * @package         yaml-for-drupal
+ * @version         6.x-3.0.6.11
+ * @lastmodified    2008-11-10
+ */
+
+@media screen, projection
+{
+  /*------------------------------------------------------------------------------------------------------*/
+
+  /**
+   * (en) Formatting YAML's  basic layout elements
+   * (de) Gestaltung des YAML Basis-Layouts
+   */
+
+  /* (en) Centering layout in old IE-versions */
+  /* (de) Zentrierung des Layouts in alten IE-versionen */
+  #page_margins { text-align: right; }
+
+  /* (en) Designing main layout elements */
+  /* (de) Gestaltung der Hauptelemente des Layouts */
+  #header { padding: 45px 20px 1em 2em; }
+
+  /* (en) adjustment of main navigation */
+  /* (de) Anpassung der Hauptnavigation */
+  #nav ul {
+    margin-left: 0; /* Reset LTR */
+    margin-right: 20px;
+  }
+
+}
