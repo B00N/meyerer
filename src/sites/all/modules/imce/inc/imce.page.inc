@@ -47,7 +47,7 @@ function imce_content($user, $jsop = NULL) {
 
   //Before creating the content let's add main files required for imce to function properly.
   $path = drupal_get_path('module', 'imce');
-  drupal_add_js($path . '/js/jquery.form.js');
+  drupal_add_js(module_exists('jquery_update') && variable_get('jquery_update_jquery_version', '1.3') > 1.3 ? 'misc/jquery.form.js' : $path . '/js/jquery.form.js');
   drupal_add_js($path . '/js/imce.js');
   drupal_add_js($path . '/js/imce_extras.js');
   drupal_add_css($path . '/css/imce-content.css');
@@ -255,7 +255,7 @@ function imce_fileop_form_validate($form, &$form_state) {
     return form_error($form['filenames'], t('Please select a file.'));
   }
 
-  //filenames come seperated by colon
+  //filenames come separated by colon
   $filenames = explode(':', $form_state['values']['filenames']);
   $cnt = count($filenames);
   //check the number of files.
