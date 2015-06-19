@@ -111,53 +111,28 @@ function google_geocode_info() {
  */
 function google_geocode_location($location = array()) {
 
-  if (function_exists('gmap_get_key')) {
-    $key = gmap_get_key();
-  }
-  else {
-    $key = variable_get('location_geocode_google_apikey', '');
-  }
-
   $query = array(
-    'key' => $key,
+    'region' => $location['country'],
+    'address' => _google_geocode_flatten($location),
     'sensor' => 'false', // Required by TOS.
-    'output' => 'xml',
-    //'ll' => 0,
-    //'spn' => 0,
-    'gl' => $location['country'],
-    'q' => _google_geocode_flatten($location),
   );
 
-  $url = url('http://maps.google.com/maps/geo', array(
+  $url = url('http://maps.googleapis.com/maps/api/geocode/json', array(
     'query' => $query,
     'external' => TRUE,
   ));
 
   $http_reply = drupal_http_request($url);
+  $data = json_decode($http_reply->data);
 
-  $status_code_match = array();
-  preg_match('/<code>(.*)<\/code>/', $http_reply->data, $status_code_match);
-  $status_code = $status_code_match[1];
-  if ($status_code != 200) {
-    watchdog('location', 'Google geocoding returned status code: %status_code', array('%status_code' => $status_code));
+  if ($data->status != 'OK') {
+    watchdog('location', 'Google geocoding returned status code: %status_code for the query url: %url', array('%status_code' => $data->status, '%url' => $url));
     return NULL;
   }
 
-  $accuracy_code_match = array();
-  preg_match('/Accuracy="([0-9])"/', $http_reply->data, $accuracy_code_match);
-  $accuracy_code = $accuracy_code_match[1];
-  $min_accuracy = variable_get('location_geocode_' . $location['country'] . 'google_accuracy_code', variable_get('location_geocode_google_minimum_accuracy', '3'));
-  if ($accuracy_code < $min_accuracy) {
-    watchdog('location', 'Google geocoding result for %country did not meet the minimum accuracy level of %min_accuracy. Result accuracy: %accuracy_code', array('%country' => $location['country'], '%min_accuracy' => $min_accuracy, '%accuracy_code' => $accuracy_code));
-    return NULL;
-  }
+  $location = $data->results[0]->geometry->location;
 
-  $latlon_match = array();
-  preg_match('/<coordinates>(.*)<\/coordinates>/', $http_reply->data, $latlon_match);
-
-  $latlon_exploded = explode(',', $latlon_match[1]);
-
-  return array('lat' => $latlon_exploded[1], 'lon' => $latlon_exploded[0]);
+  return array('lat' => $location->lat, 'lon' => $location->lng);
 }
 
 /**
@@ -165,29 +140,6 @@ function google_geocode_location($location = array()) {
  */
 function google_geocode_settings() {
   $form = array();
-  $key = '';
-  if (function_exists('gmap_get_key')) {
-    $key = gmap_get_key();
-  }
-
-  if (!empty($key)) {
-    $form['location_geocode_google_apikey'] = array(
-      '#type' => 'item',
-      '#title' => t('Google Maps API Key'),
-      '#value' => $key,
-      '#description' => t('The key in use was automatically provided by GMap.'),
-    );
-  }
-  else {
-    $form['location_geocode_google_apikey'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Google Maps API Key'),
-      '#size' => 64,
-      '#maxlength' => 128,
-      '#default_value' => variable_get('location_geocode_google_apikey', ''),
-      '#description' => t('In order to use the Google Maps API geocoding web-service, you will need a Google Maps API Key.  You can obtain one at the !sign_up_link for the !google_maps_api.  PLEASE NOTE: You will <em>not</em> have to re-enter your API key for each country for which you have selected Google Maps for geocoding.  This setting is global.', array('!sign_up_link' => '<a href="http://www.google.com/apis/maps/signup.html">sign-up page</a>', '!google_maps_api' => '<a href="http://www.google.com/apis/maps/">Google Maps API</a>'))
-    );
-  }
 
   $country = arg(4);
   if ($country) {
@@ -221,24 +173,17 @@ function _google_geocode_flatten($location = array()) {
     $address .= $location['city'];
   }
 
-  if (!empty($location['province'])) {
+  // Using province short code regularlyy gives no results.
+  if (!empty($location['province_name'])) {
     if (!empty($address)) {
       $address .= ', ';
     }
-
-    // @@@ Fix this!
-    if (substr($location['province'], 0, 3) == $location['country'] . '-') {
-      $address .= substr($location['province'], 3);
-      watchdog('Location', 'BUG: Country found in province attribute.');
-    }
-    else {
-      $address .= $location['province'];
-    }
+    $address .= $location['province_name'];
   }
 
   if (!empty($location['postal_code'])) {
     if (!empty($address)) {
-      $address .= ' ';
+      $address .= ', ';
     }
     $address .= $location['postal_code'];
   }
@@ -251,4 +196,44 @@ function _google_geocode_flatten($location = array()) {
   }
 
   return $address;
+}
+
+/**
+ * Gets a components string to pass to the google geocode API.
+ *
+ * This is required to get more accurate results because sometimes when passing
+ * in a small piece of information, like a country code only, it could also
+ * match a different part of an address for another country as the highest
+ * match.
+ *
+ * See https://developers.google.com/maps/documentation/geocoding/#ComponentFiltering
+ * for details.
+ *
+ * @param array $location
+ *   A location array.
+ *
+ * @return string
+ *   A components string formatted as per the docs page linked to above.
+ */
+function _google_geocode_get_components($location = array()) {
+  // Check if its a valid address
+  if (empty($location)) {
+    return '';
+  }
+
+  $components = array();
+  if (!empty($location['city'])) {
+    $components[] = 'locality:' . $location['city'];
+  }
+  if (!empty($location['province_name'])) {
+    $components[] = 'administrative_area:' . $location['province_name'];
+  }
+  if (!empty($location['postal_code'])) {
+    $components[] = 'postal_code:' . $location['postal_code'];
+  }
+  if (!empty($location['country'])) {
+    $components[] = 'country:' . $location['country'];
+  }
+
+  return implode('|', $components);
 }
