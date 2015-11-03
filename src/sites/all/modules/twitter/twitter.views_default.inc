@@ -1,6 +1,10 @@
 <?php
 
 function twitter_views_default_views() {
+  if (!variable_get('twitter_use_default_views', TRUE)) {
+    return;
+  }
+
   $view = new view;
   $view->name = 'tweets';
   $view->description = 'Displays Twitter.com status messages for users who have associated Twitter accounts.';
@@ -48,7 +52,7 @@ function twitter_views_default_views() {
       'link_urls' => 1,
       'link_usernames' => 1,
       'link_hashtags' => 1,
-      'hashtags_url' => 'http://search.twitter.com/search?q=%23',
+      'hashtags_url' => 'https://twitter.com/search?q=%23',
       'link_attributes' => 1,
       'exclude' => 0,
       'id' => 'text',
@@ -227,7 +231,7 @@ function twitter_views_default_views() {
       'link_urls' => 1,
       'link_usernames' => 1,
       'link_hashtags' => 1,
-      'hashtags_url' => 'http://search.twitter.com/search?q=%23',
+      'hashtags_url' => 'https://twitter.com/search?q=%23',
       'link_attributes' => 1,
       'exclude' => 0,
       'id' => 'text',

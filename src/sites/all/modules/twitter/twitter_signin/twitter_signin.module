@@ -21,7 +21,7 @@ function twitter_signin_menu() {
     'title' => 'Sign-in',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('twitter_signin_admin_settings'),
-    'access arguments' => array('administer site configuration'),
+    'access arguments' => array('administer twitter'),
     'file' => 'twitter_signin.pages.inc',
     'type' => MENU_LOCAL_TASK,
     'weight' => 5,
@@ -39,6 +39,13 @@ function twitter_signin_block($op = 'list', $delta = 0, $edit = array()) {
       $block[0]['info'] = t('Sign in with Twitter');
       return $block;
     case 'view':
+      // Don't do anything if the credentials haven't been set up yet.
+      $key = variable_get('twitter_consumer_key', '');
+      $secret = variable_get('twitter_consumer_secret', '');
+      if (empty($key) || empty($secret)) {
+        return;
+      }
+
       global $user;
       $block['subject'] = t('Sign in with Twitter');
       $block['content'] = twitter_signin_button();
@@ -66,10 +73,22 @@ function twitter_signin_theme() {
  * Themable function for an image link for signing in with Twitter.
  */
 function theme_twitter_signin_button() {
-  $img_path = drupal_get_path('module', 'twitter_signin') . '/images/';
-  $img = $img_path . variable_get('twitter_signin_button', 'Sign-in-with-Twitter-lighter-small.png');
+  $button = variable_get('twitter_signin_button', 'Sign-in-with-Twitter-lighter-small.png');
+  $class = 'twitter-signin-menuitem';
 
-  return l(theme('image', $img, t('Sign in with Twitter')), 'twitter/redirect', array('html' => TRUE));
+  if ($button == 'just-text') {
+    $item = t('Sign in with Twitter');
+    $class .= ' twitter-signin-menuitem-just-text';
+    $link = l($item, 'twitter/redirect', array('attributes' => array('class' => $class)));
+  }
+  else {
+    $img = drupal_get_path('module', 'twitter_signin') . '/images/' . $button;
+    $class .= ' twitter-signin-menuitem-image';
+    $item = theme('image', $img, t('Sign in with Twitter'));
+    $link = l($item, 'twitter/redirect', array('html' => TRUE, 'attributes' => array('class' => $class)));
+  }
+
+  return $link;
 }
 
 /**
@@ -81,7 +100,13 @@ function twitter_signin_redirect() {
   $key = variable_get('twitter_consumer_key', '');
   $secret = variable_get('twitter_consumer_secret', '');
   $twitter = new Twitter($key, $secret);
-  $token = $twitter->get_request_token();
+
+  // Specify a callback_url when generating our token that will match the
+  // current domain.
+  $oauth_callback = variable_get('twitter_oauth_callback_url', TWITTER_OAUTH_CALLBACK_URL);
+  $callback_url = url($oauth_callback, array('absolute' => TRUE));
+  $params = array('oauth_callback' => $callback_url);
+  $token = $twitter->get_request_token($params);
 
   $_SESSION['twitter_oauth']['token'] = $token;
   $_SESSION['twitter_oauth']['destination'] = referer_uri();
@@ -93,18 +118,36 @@ function twitter_signin_redirect() {
  * Implements hook_form_alter().
  */
 function twitter_signin_form_alter(&$form, $form_state, $form_id) {
+  // By default don't do anything when the site is in maintenance mode, but
+  // allow this to be changed so that admins can still login.
+  if (defined('MAINTENANCE_MODE') && !variable_get('twitter_signin_maintenance_mode', FALSE)) {
+    return;
+  }
+
   if ($form_id == 'twitter_oauth_callback' && isset($_SESSION['twitter_oauth']['signin'])) {
     $form['#submit'] = array_merge(array('twitter_signin_oauth_callback_submit'), $form['#submit']);
   }
 
-  if ($form_id == 'user_login' || $form_id == 'user_login_block') {
-    $items = array();
-    $items[] = twitter_signin_button();
-
-    $form['twitter_signin'] = array(
-      '#value' => theme('item_list', $items),
-    );
+  // Don't do anything else if the credentials haven't been set up yet.
+  $key = variable_get('twitter_consumer_key', '');
+  $secret = variable_get('twitter_consumer_secret', '');
+  if (empty($key) || empty($secret)) {
+    return;
   }
+
+  // Login forms.
+  if ($form_id == 'user_login' || $form_id == 'user_login_block') {
+    if (variable_get('twitter_signin_login', TRUE)) {
+      $items = array();
+      $items[] = twitter_signin_button();
+
+      $form['twitter_signin'] = array(
+        '#value' => theme('item_list', $items),
+      );
+    }
+  }
+
+  // Registration form.
   elseif ($form_id == 'user_register' && isset($_SESSION['twitter']['values'])) {
     $form['name']['#default_value'] = $_SESSION['twitter']['values']['screen_name'];
     $form['auth_twitter'] = array(
@@ -124,24 +167,34 @@ function twitter_signin_oauth_callback_submit(&$form, &$form_state) {
   $secret = variable_get('twitter_consumer_secret', '');
   $response = $form_state['twitter_oauth']['response'];
 
+  // Attempt to login as the user.
   $account = user_external_load($response['user_id']);
+
+  // The login was successful.
   if (isset($account->uid)) {
+    // Finish the login process.
     user_external_login($account, $response);
-    $form_state['twitter_oauth']['account'] = $account;
-    $success = TRUE;
+    return TRUE;
   }
-  elseif ($uid = db_result(db_query("SELECT uid FROM {twitter_account} WHERE twitter_uid= %d", $response['user_id']))) {
-    // We have an existing Twitter account - set it up for login.
-    $account = user_load($uid);
-    $edit['authname_twitter'] = $response['user_id'];
-    user_save($account, $edit);
-    $user = $account;
-    $form_state['twitter_oauth']['account'] = $account;
-    $success = TRUE;
-  }
+
+  // The login process was not completely successful.
   else {
+    // See if the user exists on the site.
+    $uid = db_result(db_query("SELECT uid FROM {twitter_account} WHERE twitter_uid= %d", $response['user_id']));
+
+    // We have an existing Twitter account - set it up for login.
+    if (!empty($uid)) {
+      $account = user_load($uid);
+      $edit['authname_twitter'] = $response['user_id'];
+      $edit['name'] = $account->name;
+      user_save($account, $edit);
+      $user = $account;
+      $form_state['twitter_oauth']['account'] = $account;
+      $success = TRUE;
+    }
+
     // No existing user account, let's see if we can register.
-    if (variable_get('twitter_signin_register', 0)) {
+    elseif (variable_get('twitter_signin_register', 0)) {
       // Check for a nickname collision.
       $account = user_load(array('name' => $response['screen_name']));
       if (empty($account->uid)) {
@@ -154,37 +207,58 @@ function twitter_signin_oauth_callback_submit(&$form, &$form_state) {
           'authname_twitter' => $response['user_id'],
           'access' => time(),
         );
-        $account = user_save('', $edit);
-        $user = $account;
+
+        // Try saving the new user account.
+        try {
+          $account = user_save('', $edit);
+        }
+        catch (Exception $e) {
+          watchdog('oauth_login', "Exception saving new account: ". $e->getMessage(), '', WATCHDOG_WARNING);
+          return FALSE;
+        }
+
+        // Reload the user's account object.
+        $account = user_load($account->uid);
+
+        // Connect the Drupal user account and the Twitter account together.
         $form_state['twitter_oauth']['account'] = $account;
-        drupal_set_message(t('You have been automatically registered with the password !password. ' .
-          'Copy it to !link.', array(
-            '!password' => $password,
-            '!link' => l('set your account settings', 'user/' . $account->uid . '/edit'),
-          )
-        ));
+
+        $args = array(
+          '!password' => $password,
+          '!link' => l('set your account settings', 'user/' . $account->uid . '/edit'),
+        );
+        if (variable_get('twitter_signin_show_password', TRUE)) {
+          drupal_set_message(t('You have been automatically registered with the password !password. Copy it to !link.', $args));
+        }
         $success = TRUE;
       }
       else {
-        drupal_set_message(t('The nickname %name is already in use on this site, please register below with a new nick name, or @login to continue.',
-          array(
-            '%name' => $response['screen_name'],
-            '@login' => url('user/login')
-          )
-        ), 'warning');
+        $args = array(
+          '%name' => $response['screen_name'],
+          '@login' => url('user/login')
+        );
+        drupal_set_message(t('The nickname %name is already in use on this site, please register below with a new nick name, or @login to continue.', $args), 'warning');
       }
     }
+
+    // Not allowed to register via Twitter.
     else {
       drupal_set_message(t('Please log in or register to relate your Twitter account with a user.'));
+    }
+
+    if ($success) {
+      // Log the user into their new account.
+      $user = $account;
+
+      // Trigger hook_user_login and other post-login cleanup.
+      user_authenticate_finalize($edit);
+      return TRUE;
     }
   }
 
   if (!$success) {
     $_SESSION['twitter']['values'] = $response;
     drupal_goto('user/login');
-  }
-  else {
-    user_authenticate_finalize($edit);
   }
 }
 

@@ -18,15 +18,37 @@ function twitter_requirements($phase) {
     if (empty($consumer_key) || empty($consumer_secret)) {
       $requirements['twitter_keys']['value'] = $t('Missing');
       $requirements['twitter_keys']['description'] =
-        $t('In order to interact with Twitter, you need to create an application at ' .
-           '<a href="http://dev.twitter.com" target="_blank">http://dev.twitter.com</a> ' .
-           'and set the generated Application keys at the ' .
-           '<a href="/admin/config/services/twitter">Twitter settings page</a>');
+        $t('In order to interact with Twitter, you need to create an application at !twitter_dev and set the generated Application keys at the !twitter_settings_page.',
+          array(
+            '!twitter_dev' => l('https://dev.twitter.com', 'https://dev.twitter.com'),
+            '!twitter_settings_page' => l($t('Twitter settings page'), 'admin/config/services/twitter'),
+          ));
       $requirements['twitter_keys']['severity'] = REQUIREMENT_ERROR;
     }
     else {
       $requirements['twitter_keys']['value'] = $t('Configured');
       $requirements['twitter_keys']['severity'] = REQUIREMENT_OK;
+    }
+
+    // Verify that the OAuth module is installed and supported - if the
+    // lib/OAuth.php file isn't available then the wrong version of OAuth is
+    // installed.
+    $path = drupal_get_path('module', 'oauth_common') . '/lib/OAuth.php';
+    if (!file_exists($path)) {
+      $requirements['twitter_oauth'] = array(
+        'title' => $t('Twitter module requirements'),
+        'severity' => REQUIREMENT_ERROR,
+        'value' => $t('OAuth module v6.x-3.x is required'),
+        'description' => $t('Upgrade to the latest v6.x-3.x release of the <a href="@oauth">OAuth module</a> in order for the Twitter module to work correctly, the v6.x-2.x releases will not work.', array('@oauth' => 'https://www.drupal.org/project/oauth')),
+      );
+    }
+    else {
+      $requirements['twitter_oauth'] = array(
+        'title' => $t('Twitter module requirements'),
+        'severity' => REQUIREMENT_OK,
+        'value' => $t('OAuth module v6.x-3.x is installed'),
+        'description' => $t('A compatible version of the OAuth module is installed.'),
+      );
     }
   }
   return $requirements;
@@ -41,10 +63,9 @@ function twitter_schema() {
     'fields' => array(
       'twitter_id' => array(
         'description' => "Unique identifier for each {twitter} post.",
-        'type' => 'numeric',
+        'type' => 'int',
         'unsigned' => TRUE,
-        'precision' => 20,
-        'scale' => 0,
+        'size' => 'big',
         'not null' => TRUE,
         'default' => 0,
       ),
@@ -69,8 +90,14 @@ function twitter_schema() {
       ),
       'text' => array(
         'description' => "The text of the {twitter} post.",
-        'type' => 'varchar',
-        'length' => 255,
+        // Using a blob instead of a text type make it possible for MySQL to
+        // handle extended UTF8 characters, like emoji.
+        // @see https://www.drupal.org/node/1910376
+        'type' => 'blob',
+        // Balance size vs performance. The August 2015 update allows for DMs
+        // that are 10,000 characters in length, so in theory MySQL's default
+        // blob length of 16KB should be enough.
+        'size' => 'normal',
         'not null' => FALSE,
       ),
       'source' => array(
@@ -81,19 +108,19 @@ function twitter_schema() {
       ),
       'in_reply_to_status_id' => array(
         'description' => "Unique identifier of a status this {twitter} post was replying to.",
-        'type' => 'numeric',
+        'type' => 'int',
         'unsigned' => TRUE,
-        'precision' => 20,
-        'scale' => 0,
+        'size' => 'big',
         'not null' => FALSE,
+        'default' => 0,
       ),
       'in_reply_to_user_id' => array(
         'description' => "Unique identifier for the {twitter_account} this post was replying to.",
-        'type' => 'numeric',
+        'type' => 'int',
         'unsigned' => TRUE,
-        'precision' => 20,
-        'scale' => 0,
+        'size' => 'big',
         'not null' => FALSE,
+        'default' => 0,
       ),
       'in_reply_to_screen_name' => array(
         'description' => "Screen name of the {twitter} user this post was replying to.",
@@ -109,8 +136,11 @@ function twitter_schema() {
         'default' => 0,
       ),
     ),
-    'indexes' => array('screen_name' => array('screen_name')),
     'primary key' => array('twitter_id'),
+    'indexes' => array(
+      'screen_name' => array('screen_name'),
+      'created_time' => array('created_time'),
+    ),
   );
 
   $schema['twitter_account'] = array(
@@ -118,10 +148,9 @@ function twitter_schema() {
     'fields' => array(
       'twitter_uid' => array(
         'description' => "The unique identifier of the {twitter_account}.",
-        'type' => 'numeric',
+        'type' => 'int',
         'unsigned' => TRUE,
-        'precision' => 20,
-        'scale' => 0,
+        'size' => 'big',
         'not null' => TRUE,
         'default' => 0,
       ),
@@ -305,11 +334,14 @@ function twitter_schema() {
         'description' => "The uid of the user who added this Twitter account",
         'type' => 'int',
         'unsigned' => TRUE,
-        'not null' => TRUE,
+        'not null' => FALSE,
         'default' => 0,
       ),
     ),
-    'indexes' => array('screen_name' => array('screen_name')),
+    'indexes' => array(
+      'screen_name' => array('screen_name'),
+      'uid' => array('uid'),
+    ),
     'primary key' => array('twitter_uid'),
   );
 
@@ -331,7 +363,7 @@ function twitter_install() {
 function twitter_uninstall() {
   // Remove tables.
   drupal_uninstall_schema('twitter');
-  // Remove variables
+  // Remove variables.
   variable_del('twitter_post_default_state');
   variable_del('twitter_consumer_key');
   variable_del('twitter_consumer_secret');
@@ -349,6 +381,8 @@ function twitter_uninstall() {
   }
   variable_del('twitter_signin_button');
   variable_del('twitter_signin_register');
+  variable_del('twitter_use_default_views');
+  variable_del('twitter_oauth_callback_url');
 }
 
 /**
@@ -422,7 +456,8 @@ function twitter_update_6003() {
  * Add NOT NULL constraint and DEFAULT value to the screen_name field of the 
  * twitter and twitter_user tables per updated schema definition.
  *
- * See http://drupal.org/node/336048 and http://drupal.org/node/430442
+ * @see https://www.drupal.org/node/336048
+ * @see https://www.drupal.org/node/430442
  */
 function twitter_update_6004() {
   $ret = array();
@@ -447,10 +482,10 @@ function twitter_update_6004() {
  * converts them to floats in memory while we work with them, but db_placeholders()
  * always treats them as %d and casts them back to dumb signed ints.
  *
- * See http://drupal.org/node/333788 for more info.
- *
  * Instead we'll set the column type to 'string' which is a little like jumping
  * off the Sears Tower because the elevator's broken. But that's life.
+ *
+ * @see https://www.drupal.org/node/333788
  */
 function twitter_update_6005() {
   $ret = array();
@@ -556,8 +591,10 @@ function twitter_update_6006() {
   return $ret;
 }
 
-/*
- * Update the last_refresh column to supply a default value. http://drupal.org/node/301317
+/**
+ * Update the last_refresh column to supply a default value.
+ *
+ * @see https://www.drupal.org/node/301317
  */
 function twitter_update_6007() {
   $ret = array();
@@ -840,26 +877,260 @@ function twitter_update_6503() {
 
 /**
  * Adds field added_by_uid to twitter_account table.
- *
- * This update has been set empty afterwards as the existing field twitter_account.uid is used.
  */
-function twitter_update_6504() {}
+function twitter_update_6504() {
+  $ret = array();
+
+  $data = array(
+    'description' => "The uid of the user who added this Twitter account",
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0,
+  );
+  db_add_field($ret, 'twitter_account', 'added_by_uid', $data);
+
+  return $ret;
+}
 
 /**
  * Renames twitter_account.added_by_uid to twitter_account.uid.
  *
- * This reverts updates 6502 and 6504.
+ * If the {twitter_account}.uid field already exists, don't do anything.
  */
 function twitter_update_6505() {
   $ret = array();
+
+  // If there is no {twitter_account}.uid field, add it.
+  if (!db_field_exists('twitter_account', 'uid')) {
+    $spec = array(
+     'description' => "The uid of the user who added this Twitter account",
+     'type' => 'int',
+     'unsigned' => TRUE,
+     'not null' => TRUE,
+     'default' => 0,
+    );
+
+    // If the 'added_by_uid' field exists, as was added by update 6504 and needs
+    // to be renamed.
+    if (db_field_exists('twitter_account', 'added_by_uid')) {
+      db_change_field($ret, 'twitter_account', 'added_by_uid', 'uid', $spec);
+    }
+
+    // The old 6504 update was not added, so something strange happened and the
+    // field was not added.
+    else {
+      db_add_field($ret, 'twitter_account', 'uid', $spec);
+    }
+  }
+
+  return $ret;
+}
+
+/**
+ * Convert the twitter_id to a BIGINT. Yes, this is going back to how it was in
+ * twitter_update_6003(). Sorry.
+ */
+function twitter_update_6506() {
+  $ret = array();
   $spec = array(
-   'description' => "The uid of the user who added this Twitter account",
-   'type' => 'int',
-   'unsigned' => TRUE,
-   'not null' => TRUE,
-   'default' => 0,
+    'description' => t("Unique identifier for each {twitter} post."),
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'size' => 'big',
+    'not null' => TRUE,
+    'default' => 0,
+  );
+  $keys = array(
+    'primary key' => array(
+      'twitter_id',
+    ),
   );
 
-  db_change_field($ret, 'twitter_account', 'added_by_uid', 'uid', $spec);
+  // Drop the existing primary key.
+  db_drop_primary_key($ret, 'twitter');
+
+  // Adjust the table, adding back the primary key again.
+  db_change_field($ret, 'twitter', 'twitter_id', 'twitter_id', $spec, $keys);
+
   return $ret;
+}
+
+/**
+ * Update the twitter_account.uid column to accept NULL values.
+ */
+function twitter_update_6507() {
+  $ret = array();
+
+  $spec = array(
+    'description' => "The uid of the user who added this Twitter account.",
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => FALSE,
+    'default' => 0,
+  );
+  db_change_field($ret, 'twitter_account', 'uid', 'uid', $spec);
+
+  return $ret;
+}
+
+/**
+ * Change {twitter}.in_reply_to_status_id to BIGINT.
+ */
+function twitter_update_6508() {
+  $ret = array();
+
+  $spec = array(
+    'description' => "Unique identifier of a status this {twitter} post was replying to.",
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'size' => 'big',
+    'not null' => FALSE,
+    'default' => 0,
+  );
+  db_change_field($ret, 'twitter', 'in_reply_to_status_id', 'in_reply_to_status_id', $spec);
+
+  return $ret;
+}
+
+/**
+ * Change {twitter}.in_reply_to_user_id to BIGINT.
+ */
+function twitter_update_6509() {
+  $ret = array();
+
+  $spec = array(
+    'description' => "Unique identifier for the {twitter_account} this post was replying to.",
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'size' => 'big',
+    'not null' => FALSE,
+    'default' => 0,
+  );
+  db_change_field($ret, 'twitter', 'in_reply_to_user_id', 'in_reply_to_user_id', $spec);
+
+  return $ret;
+}
+
+/**
+ * Change {twitter_account}.twitter_uid to BIGINT.
+ */
+function twitter_update_6510() {
+  $ret = array();
+
+  db_drop_primary_key($ret, 'twitter_account');
+  $spec = array(
+    'description' => "The unique identifier of the {twitter_account}.",
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'size' => 'big',
+    'not null' => TRUE,
+    'default' => 0,
+  );
+  $index_spec = array(
+    'primary key' => array('twitter_uid'),
+  );
+  db_change_field($ret, 'twitter_account', 'twitter_uid', 'twitter_uid', $spec, $index_spec);
+
+  return $ret;
+}
+
+/**
+ * Change Twitter text field to blob to accommodate utf8mb4 characters.
+ *
+ * @todo This schema update is a workaround and should be reverted as soon as
+ *   Drupal's MySQL implementation properly supports the utf8mb4 character set.
+ *   However, it's unlikely that D6 will be updated to support this.
+ *
+ * @see https://www.drupal.org/node/1910376
+ */
+function twitter_update_6511() {
+  $ret = array();
+
+  $spec = array(
+    'description' => "The text of the {twitter} post.",
+    // Using a blob instead of a text type make it possible for MySQL to
+    // handle extended UTF8 characters, like emoji.
+    // @see https://www.drupal.org/node/1910376
+    'type' => 'blob',
+    // Balance size vs performance. The August 2015 update allows for DMs
+    // that are 10,000 characters in length, so in theory MySQL's default
+    // blob length of 16KB should be enough.
+    'size' => 'normal',
+    'not null' => FALSE,
+  );
+  db_change_field($ret, 'twitter', 'text', 'text', $spec);
+
+  return $ret;
+}
+
+/**
+ * Replaced by update 7511.
+ */
+function twitter_update_6512() {
+  $ret = array();
+
+  // This is used to clear the caches. However, because update 7511 also runs
+  // it, remove this one so that any site that runs both updates won't
+  // inadvertently rebuild the menu multiple times, which can be a huge
+  // performance drain.
+  // menu_rebuild();
+
+  return $ret;
+}
+
+/**
+ * Add an extra index on {twitter}.created_time.
+ */
+function twitter_update_6513() {
+  $ret = array();
+
+  db_add_index($ret, 'twitter', 'created_time', array('created_time'));
+
+  return $ret;
+}
+
+/**
+ * Add the new "administer twitter" permission to all roles that have the
+ * "administer site configuration" permission.
+ */
+function twitter_update_6514() {
+  $ret = array();
+
+  $result = db_query("SELECT rid
+    FROM {permission}
+    WHERE perm = 'administer site configuration'");
+  while ($row = db_fetch_object($result)) {
+    $record = new StdClass();
+    $record->rid = $row->rid;
+    $record->perm = 'administer twitter';
+    $record->tid = 0;
+    drupal_write_record('permission', $record);
+  }
+
+  // Also reload the menus so the new permission is adopted.
+  menu_rebuild();
+
+  return $ret;
+}
+
+/**
+ * Add index on {twitter_account}.uid.
+ */
+function twitter_update_6515() {
+  $ret = array();
+
+  db_add_index($ret, 'twitter_account', 'uid', array('uid'));
+
+  return $ret;
+}
+
+/**
+ * Updates twitter_search variable to point to https://twitter.com/ if they
+ * still point to the unsecured URL.
+ */
+function twitter_update_6516() {
+  if (variable_get('twitter_search', 'https://twitter.com/') == 'http://twitter.com') {
+    variable_set('twitter_search', 'https://twitter.com/');
+  }
 }

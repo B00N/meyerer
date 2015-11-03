@@ -3,11 +3,12 @@ description = Sets up a mock web server to simulate API calls on tests
 core = 6.x
 hidden = TRUE
 dependencies[] = twitter
-dependencies[] = simpletest
 
-; Information added by drupal.org packaging script on 2013-04-19
-version = "6.x-5.1"
+; dependencies[] = simpletest
+
+; Information added by Drupal.org packaging script on 2015-10-05
+version = "6.x-5.4"
 core = "6.x"
 project = "twitter"
-datestamp = "1366377444"
+datestamp = "1444046041"
 
